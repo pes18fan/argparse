@@ -226,7 +226,7 @@ static int try_parse_flags(struct Argparser *parser, int argc,
         }
 
         if (received_flag == NULL) {
-            fprintf(stderr, "parse: unknown flag %s", flag_name);
+            fprintf(stderr, "parse: unknown flag %s\n", flag_name);
             print_usage(parser);
             return -1;
         }

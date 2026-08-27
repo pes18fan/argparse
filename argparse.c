@@ -1,6 +1,7 @@
 #include "argparse.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,10 +39,10 @@ struct Argparser *make_parser(struct Argparser *parent, const char *name,
                name, parent->name, MAX_SUBPARSERS);
 
         // A parser cannot have a subparser if it takes an argument, ensure that
-        ensure(parent->arg_kind == Ak_None,
+        ensure(parent->arg.kind == Ak_None,
                "make_parser: cannot add subparser %s to parser %s because the "
                "latter takes a %s argument",
-               name, parent->name, argument_kind_str[parent->arg_kind]);
+               name, parent->name, argument_kind_str[parent->arg.kind]);
 
         // Ensure no duplicates
         for (int i = 0; i < parent->subparser_count; i++) {
@@ -58,7 +59,8 @@ struct Argparser *make_parser(struct Argparser *parent, const char *name,
                              .description = description,
                              .subparser_count = 0,
                              .flag_count = 0,
-                             .arg_kind = kind };
+                             .arg.kind = kind,
+                             .arg._available = false };
     memset(p->subparsers, 0, sizeof p->subparsers);
     memset(p->flags, 0, sizeof p->flags);
 
@@ -132,12 +134,16 @@ void add_flag(struct Argparser *parser, const char *name,
     *f = (struct Flag){ .name = name,
                         .description = description,
                         .short_name = short_name,
-                        .arg_kind = kind };
+                        .arg.kind = kind,
+                        .arg._available = false };
     parser->flags[parser->flag_count] = f;
     parser->flag_count++;
 }
 
-void print_usage(struct Argparser *parser)
+// Print a parser usage message.
+// This is the output of the program when the --help or -h flag is invoked, and
+// is also shown on argument parsing errors.
+static void print_usage(struct Argparser *parser)
 {
     printf("%s", parser->name);
     if (parser->description != NULL) {
@@ -147,7 +153,7 @@ void print_usage(struct Argparser *parser)
 
     printf("Usage:\n");
     printf("    ");
-    if (parser->arg_kind == Ak_None) {
+    if (parser->arg.kind == Ak_None) {
         printf("%s", parser->name);
 
         if (parser->subparser_count > 0) {
@@ -158,7 +164,7 @@ void print_usage(struct Argparser *parser)
             printf(" <flags>");
         }
     } else {
-        printf("%s <%s>", parser->name, argument_kind_str[parser->arg_kind]);
+        printf("%s <%s>", parser->name, argument_kind_str[parser->arg.kind]);
 
         // No subparser_count check here, as a parser that takes an argument
         // is NOT allowed to have any subcommands
@@ -207,11 +213,71 @@ void print_usage(struct Argparser *parser)
     }
 }
 
+// Attempt to parse an argument. It is considered an error if no valid argument
+// is found.
+// Returns the number of arguments parsed on success, and -1 on error.
+static int parse_argument(struct Argparser *parser, int argc,
+                          const char *argv[])
+{
+    if (argc == 0 && parser->arg.kind != Ak_None) {
+        fprintf(stderr, "parse: %s argument for %s not provided\n",
+                argument_kind_str[parser->arg.kind], parser->name);
+        return -1;
+    }
+
+    int initial_argc = argc;
+
+    // Parse the argument
+    // For now this just means consuming the thing
+    switch (parser->arg.kind) {
+    case Ak_None:
+        break;
+    case Ak_Int: {
+        const char *arg = argv[0];
+        char *endptr;
+        long v = strtol(arg, &endptr, 10);
+
+        // Overflow/underflow, should just panic here
+        if (errno == ERANGE || v > INT_MAX || v < INT_MIN)
+            panic("parse: integer overflow on %ld", v);
+
+        //  No digits found in string
+        if (endptr == arg) {
+            fprintf(stderr, "parse: %s is not a valid integer", arg);
+            return -1;
+        }
+
+        // Entire string not consumed (string is not entirely numeric)
+        if (*endptr != '\0') {
+            fprintf(stderr, "parse: %s is not a valid integer", arg);
+            return -1;
+        }
+
+        parser->arg._i = (int) v;
+
+        argv++;
+        argc--;
+        break;
+    }
+    case Ak_String: {
+        const char *arg = argv[0];
+        parser->arg._s = arg;
+
+        argv++;
+        argc--;
+        break;
+    }
+    default:
+        panic("parse: invalid argument kind %d", parser->arg.kind);
+    }
+
+    return initial_argc - argc;
+}
+
 // Parse flags if found. If no args are remaining it doesn't do anything.
 // Returns a whole number (0 or higher) on success, which is the number of flags
 // parsed. Returns -1 on error.
-static int try_parse_flags(struct Argparser *parser, int argc,
-                           const char *argv[])
+static int parse_flags(struct Argparser *parser, int argc, const char *argv[])
 {
     if (argc == 0)
         return 0;
@@ -249,17 +315,13 @@ static int try_parse_flags(struct Argparser *parser, int argc,
         argv++;
         argc--;
 
-        switch (received_flag->arg_kind) {
-        case Ak_None:
-            break;
-        case Ak_Int:
-        case Ak_String:
-            argv++;
-            argc--;
-            break;
-        default:
-            panic("parse: invalid argument kind %d", parser->arg_kind);
-        }
+        // Try to parse argument
+        int skipped = parse_argument(parser, argc, argv);
+        if (skipped == -1)
+            return skipped;
+
+        argv += skipped;
+        argc -= skipped;
     }
 
     return initial_argc - argc;
@@ -278,7 +340,7 @@ int parse(struct Argparser *parser, int argc, const char *argv[])
     argc--;
 
     // Try to parse flags
-    skipped = try_parse_flags(parser, argc, argv);
+    skipped = parse_flags(parser, argc, argv);
     if (skipped == -1)
         return skipped;
 
@@ -310,35 +372,23 @@ int parse(struct Argparser *parser, int argc, const char *argv[])
     }
 
     // Try to parse flags... again
-    skipped = try_parse_flags(parser, argc, argv);
+    skipped = parse_flags(parser, argc, argv);
     if (skipped == -1)
         return skipped;
 
     argv += skipped;
     argc -= skipped;
 
-    if (argc == 0 && parser->arg_kind != Ak_None) {
-        fprintf(stderr, "parse: %s argument for %s not provided\n",
-                argument_kind_str[parser->arg_kind], parser->name);
+    // Try to parse argument
+    skipped = parse_argument(parser, argc, argv);
+    if (skipped == -1)
         goto die;
-    }
 
-    // Parse the argument
-    // For now this just means consuming the thing
-    switch (parser->arg_kind) {
-    case Ak_None:
-        break;
-    case Ak_Int:
-    case Ak_String:
-        argv++;
-        argc--;
-        break;
-    default:
-        panic("parse: invalid argument kind %d", parser->arg_kind);
-    }
+    argv += skipped;
+    argc -= skipped;
 
     // Parse any remaining flags...
-    skipped = try_parse_flags(parser, argc, argv);
+    skipped = parse_flags(parser, argc, argv);
     if (skipped == -1)
         return skipped;
 
@@ -351,3 +401,5 @@ die:
     print_usage(parser);
     return -1;
 }
+
+#define get_arg(parser, subcommand_name)

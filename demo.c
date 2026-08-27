@@ -9,8 +9,7 @@ int main(int argc, const char *argv[])
     add_flag(p, "--fuq", "-f", "just a test", Ak_None);
     add_flag(p, "--coq", "-c", "just another test", Ak_None);
 
-    struct Argparser *another =
-        make_parser(p, "hewwo", "another test", Ak_String);
+    struct Argparser *another = make_parser(p, "hewwo", "another test", Ak_Int);
 
     add_flag(another, "--heh", "-j", "just another another test", Ak_None);
 

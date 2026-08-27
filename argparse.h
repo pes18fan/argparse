@@ -4,6 +4,8 @@
 #ifndef argparse_h
 #define argparse_h
 
+#include <stdbool.h>
+
 #define MAX_FLAGS 16
 #define MAX_SUBPARSERS 16
 
@@ -12,6 +14,15 @@ enum Argument_Kind {
     Ak_None,
     Ak_Int,
     Ak_String,
+};
+
+struct Argument {
+    enum Argument_Kind kind;
+    bool _available;
+    union {
+        int _i;
+        const char *_s;
+    };
 };
 
 struct Flag {
@@ -24,9 +35,12 @@ struct Flag {
     // Description. Can be left NULL to not provide any of it.
     const char *description;
 
-    // Argument kind that the flag takes. If it takes no argument, it is
-    // Ak_None.
-    enum Argument_Kind arg_kind;
+    // Argument taken by the flag.
+    // It has some kind, referring to its data type. If the flag takes no
+    // argument, the kind is is Ak_None.
+    // It also holds a union which holds the actual argument data after parsing.
+    // It is not safe to access this data directly; use `get_flag` instead.
+    struct Argument arg;
 };
 
 // Parser for a command. Has a set of its own subparsers.
@@ -46,8 +60,12 @@ struct Argparser {
     struct Flag *flags[MAX_FLAGS];
     int flag_count;
 
-    // Argument kind. If no argument taken, it is Ak_None.
-    enum Argument_Kind arg_kind;
+    // Argument taken by the command.
+    // It has some kind, referring to its data type. If the command takes no
+    // argument, the kind is is Ak_None.
+    // It also holds a union which holds the actual argument data after parsing.
+    // It is not safe to access this data directly; use `get_arg` instead.
+    struct Argument arg;
 };
 
 // Create an argument parser as the subparser of `parent`, with a subcommand
@@ -78,11 +96,6 @@ void destroy_parser(struct Argparser *parent);
 void add_flag(struct Argparser *parser, const char *name,
               const char *short_name, const char *description,
               enum Argument_Kind kind);
-
-// Print a parser usage message.
-// This is the output of the program when the --help or -h flag is invoked, and
-// is also shown on argument parsing errors.
-void print_usage(struct Argparser *parser);
 
 // Parse arguments based on the spec in `parser`.
 // Returns the number of arguments parsed on success (a non-negative integer),

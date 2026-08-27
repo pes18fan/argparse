@@ -55,12 +55,14 @@ struct Argparser *make_parser(struct Argparser *parent, const char *name,
     struct Argparser *p = malloc(sizeof(struct Argparser));
     ensure(p != NULL, "make_parser: fatal error: %s", strerror(errno));
 
-    *p = (struct Argparser){ .name = name,
-                             .description = description,
-                             .subparser_count = 0,
-                             .flag_count = 0,
-                             .arg.kind = kind,
-                             .arg._available = false };
+    *p = (struct Argparser){
+        .name = name,
+        .description = description,
+        .subparser_count = 0,
+        .flag_count = 0,
+        .arg.kind = kind,
+    };
+
     memset(p->subparsers, 0, sizeof p->subparsers);
     memset(p->flags, 0, sizeof p->flags);
 
@@ -131,11 +133,12 @@ void add_flag(struct Argparser *parser, const char *name,
 
     struct Flag *f = malloc(sizeof(struct Flag));
     ensure(f != NULL, "make_parser: fatal error: %s", strerror(errno));
-    *f = (struct Flag){ .name = name,
-                        .description = description,
-                        .short_name = short_name,
-                        .arg.kind = kind,
-                        .arg._available = false };
+    *f = (struct Flag){
+        .name = name,
+        .description = description,
+        .short_name = short_name,
+        .arg.kind = kind,
+    };
     parser->flags[parser->flag_count] = f;
     parser->flag_count++;
 }
@@ -401,5 +404,3 @@ die:
     print_usage(parser);
     return -1;
 }
-
-#define get_arg(parser, subcommand_name)

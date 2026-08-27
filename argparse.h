@@ -18,7 +18,6 @@ enum Argument_Kind {
 
 struct Argument {
     enum Argument_Kind kind;
-    bool _available;
     union {
         int _i;
         const char *_s;

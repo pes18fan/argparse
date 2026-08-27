@@ -38,7 +38,7 @@ struct Argparser *make_parser(struct Argparser *parent, const char *name,
                "parent has too many subparsers; only upto %d supported",
                name, parent->name, MAX_SUBPARSERS);
 
-        // A parser cannot have a subparser if it takes an argument, ensure that
+        // A parser cannot have a subparser if it takes an argument
         ensure(parent->arg.kind == Ak_None,
                "make_parser: cannot add subparser %s to parser %s because the "
                "latter takes a %s argument",

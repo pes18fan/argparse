@@ -1,5 +1,6 @@
 #include "argparse.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,13 +11,20 @@ const char *argument_kind_str[] = {
     [Ak_String] = "string",
 };
 
-// Simple wrapper for assertions with formatted errors
-#define ensure(expr, message, ...)                     \
-    do {                                               \
-        if (!(expr)) {                                 \
-            fprintf(stderr, (message), ##__VA_ARGS__); \
-            exit(1);                                   \
-        }                                              \
+// Simple wrapper for panic with formatted errors
+#define panic(message, ...)                        \
+    do {                                           \
+        fprintf(stderr, "panic: ");                \
+        fprintf(stderr, (message), ##__VA_ARGS__); \
+        exit(1);                                   \
+    } while (0)
+
+// Assertion with formatted errors
+#define ensure(expr, message, ...)           \
+    do {                                     \
+        if (!(expr)) {                       \
+            panic((message), ##__VA_ARGS__); \
+        }                                    \
     } while (0)
 
 struct Argparser *make_parser(struct Argparser *parent, const char *name,
@@ -30,10 +38,10 @@ struct Argparser *make_parser(struct Argparser *parent, const char *name,
                name, parent->name, MAX_SUBPARSERS);
 
         // A parser cannot have a subparser if it takes an argument, ensure that
-        ensure(parent->arg.kind == Ak_None,
+        ensure(parent->arg_kind == Ak_None,
                "make_parser: cannot add subparser %s to parser %s because the "
                "latter takes a %s argument",
-               name, parent->name, argument_kind_str[parent->arg.kind]);
+               name, parent->name, argument_kind_str[parent->arg_kind]);
 
         // Ensure no duplicates
         for (int i = 0; i < parent->subparser_count; i++) {
@@ -44,13 +52,13 @@ struct Argparser *make_parser(struct Argparser *parent, const char *name,
     }
 
     struct Argparser *p = malloc(sizeof(struct Argparser));
-    ensure(p != NULL, "out of memory");
+    ensure(p != NULL, "make_parser: fatal error: %s", strerror(errno));
 
     *p = (struct Argparser){ .name = name,
                              .description = description,
                              .subparser_count = 0,
                              .flag_count = 0,
-                             .arg = { .kind = kind, .ptr = NULL } };
+                             .arg_kind = kind };
     memset(p->subparsers, 0, sizeof p->subparsers);
     memset(p->flags, 0, sizeof p->flags);
 
@@ -120,11 +128,11 @@ void add_flag(struct Argparser *parser, const char *name,
     }
 
     struct Flag *f = malloc(sizeof(struct Flag));
-    ensure(f != NULL, "out of memory");
+    ensure(f != NULL, "make_parser: fatal error: %s", strerror(errno));
     *f = (struct Flag){ .name = name,
                         .description = description,
                         .short_name = short_name,
-                        .arg = { .kind = kind, .ptr = NULL } };
+                        .arg_kind = kind };
     parser->flags[parser->flag_count] = f;
     parser->flag_count++;
 }
@@ -139,7 +147,7 @@ void print_usage(struct Argparser *parser)
 
     printf("Usage:\n");
     printf("    ");
-    if (parser->arg.kind == Ak_None) {
+    if (parser->arg_kind == Ak_None) {
         printf("%s", parser->name);
 
         if (parser->subparser_count > 0) {
@@ -150,7 +158,7 @@ void print_usage(struct Argparser *parser)
             printf(" <flags>");
         }
     } else {
-        printf("%s <%s>", parser->name, argument_kind_str[parser->arg.kind]);
+        printf("%s <%s>", parser->name, argument_kind_str[parser->arg_kind]);
 
         // No subparser_count check here, as a parser that takes an argument
         // is NOT allowed to have any subcommands
@@ -240,15 +248,24 @@ static int try_parse_flags(struct Argparser *parser, int argc,
 
         argv++;
         argc--;
+
+        switch (received_flag->arg_kind) {
+        case Ak_None:
+            break;
+        case Ak_Int:
+        case Ak_String:
+            argv++;
+            argc--;
+            break;
+        default:
+            panic("parse: invalid argument kind %d", parser->arg_kind);
+        }
     }
 
     return initial_argc - argc;
 }
 
-// Recursive definition for argument parser.
-// Returns the number of arguments parsed.
-// On failure, prints the failure message along with usage, and returns -1.
-static int _parse(struct Argparser *parser, int argc, const char *argv[])
+int parse(struct Argparser *parser, int argc, const char *argv[])
 {
     int initial_argc = argc;
     int skipped;
@@ -284,7 +301,7 @@ static int _parse(struct Argparser *parser, int argc, const char *argv[])
             goto die;
         }
 
-        skipped = _parse(received_subparser, argc, argv);
+        skipped = parse(received_subparser, argc, argv);
         if (skipped == -1)
             return skipped;
 
@@ -300,17 +317,24 @@ static int _parse(struct Argparser *parser, int argc, const char *argv[])
     argv += skipped;
     argc -= skipped;
 
-    if (argc == 0 && parser->arg.kind != Ak_None) {
+    if (argc == 0 && parser->arg_kind != Ak_None) {
         fprintf(stderr, "parse: %s argument for %s not provided\n",
-                argument_kind_str[parser->arg.kind], parser->name);
+                argument_kind_str[parser->arg_kind], parser->name);
         goto die;
     }
 
     // Parse the argument
     // For now this just means consuming the thing
-    if (parser->arg.kind != Ak_None) {
+    switch (parser->arg_kind) {
+    case Ak_None:
+        break;
+    case Ak_Int:
+    case Ak_String:
         argv++;
         argc--;
+        break;
+    default:
+        panic("parse: invalid argument kind %d", parser->arg_kind);
     }
 
     // Parse any remaining flags...
@@ -326,13 +350,4 @@ static int _parse(struct Argparser *parser, int argc, const char *argv[])
 die:
     print_usage(parser);
     return -1;
-}
-
-int parse(struct Argparser *parser, int argc, const char *argv[])
-{
-    int res = _parse(parser, argc, argv);
-    if (res == -1)
-        return 1;
-
-    return 0;
 }

@@ -10,13 +10,16 @@ int main(int argc, const char *argv[])
     add_flag(p, "--coq", "-c", "just another test", Ak_None);
 
     struct Argparser *another =
-        make_parser(p, "hewwo", "another test", Ak_None);
+        make_parser(p, "hewwo", "another test", Ak_String);
 
     add_flag(another, "--heh", "-j", "just another another test", Ak_None);
 
-    int status = parse(p, argc, argv);
-
+    int parsed = parse(p, argc, argv);
     destroy_parser(p);
 
-    return status;
+    if (parsed == -1) {
+        return 1;
+    } else {
+        return 0;
+    }
 }

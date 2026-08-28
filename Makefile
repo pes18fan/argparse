@@ -1,3 +1,4 @@
+# Makefile to prepare the demo
 SOURCE := demo.c argparse.c
 TARGET := demo
 CFLAGS := -Wall -Wextra -Werror

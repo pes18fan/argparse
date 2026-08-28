@@ -19,11 +19,9 @@ struct Flag {
     // Description. Can be left NULL to not provide any of it.
     const char *description;
 
-    // Argument taken by the flag.
-    // It has some kind, referring to its data type. If the flag takes no
-    // argument, the kind is is Ak_None.
-    // It also holds a union which holds the actual argument data after parsing.
-    // It is not safe to access this data directly; use `get_flag` instead.
+    // Argument taken by the flag, it points to a specified storage location by
+    // the user.
+    // Avoid accessing this data directly.
     void *_arg;
 
     // A character representing the type of _arg. It can be one of:
@@ -50,11 +48,9 @@ struct Argparser {
     struct Flag *flags[MAX_FLAGS];
     int flag_count;
 
-    // Argument taken by the command.
-    // It has some kind, referring to its data type. If the command takes no
-    // argument, the kind is is Ak_None.
-    // It also holds a union which holds the actual argument data after parsing.
-    // It is not safe to access this data directly; use `get_arg` instead.
+    // Argument taken by the flag, it points to a specified storage location by
+    // the user.
+    // Avoid accessing this data directly.
     void *_arg;
 
     // A character representing the type of _arg. It can be one of:

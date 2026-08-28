@@ -1,24 +1,29 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "argparse.h"
 
 int main(int argc, const char *argv[])
 {
-    struct Argparser *p = make_parser(NULL, argv[0], "little test", Ak_None);
+    struct Argparser *p =
+        ap_make_parser(NULL, argv[0], "little test", 'n', NULL);
 
-    add_flag(p, "--fuq", "-f", "just a test", Ak_None);
-    add_flag(p, "--coq", "-c", "just another test", Ak_None);
+    ap_add_flag(p, "--test", "-t", "just a test", 'n', NULL);
+    ap_add_flag(p, "--test2", "-d", "just another test", 'n', NULL);
 
-    struct Argparser *another = make_parser(p, "hewwo", "another test", Ak_Int);
+    char *a;
+    struct Argparser *another =
+        ap_make_parser(p, "hewwo", "another test", 's', &a);
 
-    add_flag(another, "--heh", "-j", "just another another test", Ak_None);
+    ap_add_flag(another, "--heh", "-j", "just another another test", 'n', NULL);
 
-    int parsed = parse(p, argc, argv);
-    destroy_parser(p);
+    int parsed = ap_parse(p, argc, argv);
+    ap_destroy_parser(p);
 
     if (parsed == -1) {
         return 1;
     } else {
+        printf("got: %s", a);
         return 0;
     }
 }

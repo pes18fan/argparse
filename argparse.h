@@ -9,21 +9,6 @@
 #define MAX_FLAGS 16
 #define MAX_SUBPARSERS 16
 
-// The type of the value held by an argument.
-enum Argument_Kind {
-    Ak_None,
-    Ak_Int,
-    Ak_String,
-};
-
-struct Argument {
-    enum Argument_Kind kind;
-    union {
-        int _i;
-        const char *_s;
-    };
-};
-
 struct Flag {
     // Name of the flag.
     const char *name;
@@ -39,7 +24,13 @@ struct Flag {
     // argument, the kind is is Ak_None.
     // It also holds a union which holds the actual argument data after parsing.
     // It is not safe to access this data directly; use `get_flag` instead.
-    struct Argument arg;
+    void *_arg;
+
+    // A character representing the type of _arg. It can be one of:
+    //     - 'i': int
+    //     - 's': string (const char *)
+    //     - 'n': none (no argument at all)
+    char arg_kind;
 };
 
 // Parser for a command. Has a set of its own subparsers.
@@ -64,37 +55,48 @@ struct Argparser {
     // argument, the kind is is Ak_None.
     // It also holds a union which holds the actual argument data after parsing.
     // It is not safe to access this data directly; use `get_arg` instead.
-    struct Argument arg;
+    void *_arg;
+
+    // A character representing the type of _arg. It can be one of:
+    //     - 'i': int
+    //     - 's': string (const char *)
+    //     - 'n': none (no argument at all)
+    char arg_kind;
 };
 
 // Create an argument parser as the subparser of `parent`, with a subcommand
-// name `name`, description `description` and an argument of kind `kind`.
-// If the subcommand takes no argument, `kind` must be `Ak_None`.
-// `description` can be left NULL to not provide any of it.
+// name `name`, description `description`, and argument kind `kind`.
 // If the parser is the root parser (has no parents), `parent` must be set
 // to `NULL`.
-// If the provided parser spec has any issues (e.g. attempt to add a duplicate
-// subcommand, attempt to add a subparser for a parser that takes an argument,
-// addition of too many subparsers), the function prints the error to stderr and
-// exits the program with status 1.
-struct Argparser *make_parser(struct Argparser *parent, const char *name,
-                              const char *description, enum Argument_Kind kind);
+// The argument the command takes is provided via `kind` (described in the
+// definition of `struct Argparser`), alongside the storage region for that
+// value provided in `arg_ptr`. If the command takes no argument (`kind` ==
+// 'n'), `arg_ptr` can be set to `NULL`. If the provided parser spec has any
+// issues (e.g. attempt to add a duplicate subcommand, attempt to add a
+// subparser for a parser that takes an argument, addition of too many
+// subparsers), the function prints the error to stderr and exits the program
+// with status 1.
+struct Argparser *ap_make_parser(struct Argparser *parent, const char *name,
+                                 const char *description, char kind,
+                                 void *arg_ptr);
 
 // Deallocate an Argparser.
 // Also deallocates all of its subparsers and flags; hence you should avoid
 // running it for every single subparser; just destroy the root.
-void destroy_parser(struct Argparser *parent);
+void ap_destroy_parser(struct Argparser *parent);
 
 // Add a flag to `parser`, with a `name` and optional `short_name` and
 // `description`. The latter two can be left NULL if undesired. The type of the
-// argument the flag takes is provided via `kind`; if it takes no argument
-// `kind` must be `Ak_None`.
+// argument the flag takes is provided via `kind` (described in the definition
+// of `struct Argparser`), alongside the storage region for that value provided
+// in `arg_ptr`. If the flag takes no argument (`kind` == 'n'), `arg_ptr` can be
+// set to `NULL`.
 // If the provided flag spec has any issues (e.g. invalid flag name, attempt to
-// add a duplicate flag, addition of too many flags), the function prints the
-// error to stderr and exits the program with status 1.
-void add_flag(struct Argparser *parser, const char *name,
-              const char *short_name, const char *description,
-              enum Argument_Kind kind);
+// add a duplicate flag, addition of too many flags, invalid argument kind), the
+// function prints the error to stderr and exits the program with status 1.
+void ap_add_flag(struct Argparser *parser, const char *name,
+                 const char *short_name, const char *description, char kind,
+                 void *arg_ptr);
 
 // Parse arguments based on the spec in `parser`.
 // Returns the number of arguments parsed on success (a non-negative integer),
@@ -102,6 +104,6 @@ void add_flag(struct Argparser *parser, const char *name,
 // If it encounters a problem with the setup of the arguments (for example an
 // invalid argument kind, or invalid `argv`), it prints the issue to stderr and
 // exits the program with status 1.
-int parse(struct Argparser *parser, int argc, const char *argv[]);
+int ap_parse(struct Argparser *parser, int argc, const char *argv[]);
 
 #endif

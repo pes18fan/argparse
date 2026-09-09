@@ -4,8 +4,6 @@
 #ifndef argparse_h
 #define argparse_h
 
-#include <stdbool.h>
-
 #define MAX_FLAGS 16
 #define MAX_SUBPARSERS 16
 

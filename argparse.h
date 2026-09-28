@@ -25,7 +25,11 @@ struct Flag {
     // A character representing the type of _arg. It can be one of:
     //     - 'i': int
     //     - 's': string (const char *)
+    //     - 'b': boolean (bool/_Bool)
     //     - 'n': none (no argument at all)
+    // A point about 'b': it is similar to 'n' in how it is parsed in the
+    // sense that it doesn't actually read any command line arg for its value.
+    // The presence of the argument is enough for the value to be true.
     char arg_kind;
 };
 
@@ -54,7 +58,11 @@ struct Argparser {
     // A character representing the type of _arg. It can be one of:
     //     - 'i': int
     //     - 's': string (const char *)
+    //     - 'b': boolean (bool/_Bool)
     //     - 'n': none (no argument at all)
+    // A point about 'b': it is similar to 'n' in how it is parsed in the
+    // sense that it doesn't actually read any command line arg for its value.
+    // The presence of the argument is enough for the value to be true.
     char arg_kind;
 };
 
@@ -70,6 +78,11 @@ struct Argparser {
 // subparser for a parser that takes an argument, addition of too many
 // subparsers), the function prints the error to stderr and exits the program
 // with status 1.
+// `arg_ptr` will be one of these respective values in the case the subcommand
+// is never provided (and thus no argument ever parsed):
+//      - 'i': -0xdeadbeef
+//      - 's': "\0"
+//      - 'b': false
 struct Argparser *ap_make_parser(struct Argparser *parent, const char *name,
                                  const char *description, char kind,
                                  void *arg_ptr);
@@ -88,6 +101,11 @@ void ap_destroy_parser(struct Argparser *parent);
 // If the provided flag spec has any issues (e.g. invalid flag name, attempt to
 // add a duplicate flag, addition of too many flags, invalid argument kind), the
 // function prints the error to stderr and exits the program with status 1.
+// `arg_ptr` will be one of these respective values in the case the flag is
+// never provided (and thus no argument ever parsed):
+//      - 'i': -0xdeadbeef
+//      - 's': "\0"
+//      - 'b': false
 void ap_add_flag(struct Argparser *parser, const char *name,
                  const char *short_name, const char *description, char kind,
                  void *arg_ptr);

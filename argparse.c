@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +30,8 @@ static inline const char *argument_kind_str(char k)
         return "none";
     case 'i':
         return "int";
+    case 'b':
+        return "boolean";
     case 's':
         return "string";
     }
@@ -62,11 +65,28 @@ struct Argparser *ap_make_parser(struct Argparser *parent, const char *name,
     }
 
     // Ensure the arg kind is not invalid
-    ensure(kind == 'i' || kind == 'n' || kind == 's',
+    ensure(kind == 'i' || kind == 'n' || kind == 's' || kind == 'b',
            "add_flag: invalid arg_kind %c", kind);
 
     struct Argparser *p = malloc(sizeof(struct Argparser));
     ensure(p != NULL, "make_parser: fatal error: %s", strerror(errno));
+
+    // Set some sentinel values for the cases where no argument was read
+    switch (kind) {
+    case 'i':
+        *((int *) arg_ptr) = -0xdeadbeef;
+        break;
+    case 's':
+        *((char **) arg_ptr) = "\0";
+        break;
+    case 'b':
+        *((bool *) arg_ptr) = false;
+        break;
+    case 'n':
+        break;  // nothing to do
+    default:
+        panic("unreachable");
+    }
 
     *p = (struct Argparser){
         .name = name,
@@ -146,11 +166,29 @@ void ap_add_flag(struct Argparser *parser, const char *name,
     }
 
     // Ensure the arg kind is not invalid
-    ensure(kind == 'i' || kind == 'n' || kind == 's',
+    ensure(kind == 'i' || kind == 'n' || kind == 's' || kind == 'b',
            "add_flag: invalid arg_kind %c", kind);
 
     struct Flag *f = malloc(sizeof(struct Flag));
-    ensure(f != NULL, "make_parser: fatal error: %s", strerror(errno));
+    ensure(f != NULL, "add_flag: fatal error: %s", strerror(errno));
+
+    // Set some sentinel values for the cases where no argument was read
+    switch (kind) {
+    case 'i':
+        *((int *) arg_ptr) = -0xdeadbeef;
+        break;
+    case 's':
+        *((char **) arg_ptr) = "\0";
+        break;
+    case 'b':
+        *((bool *) arg_ptr) = false;
+        break;
+    case 'n':
+        break;  // nothing to do
+    default:
+        panic("unreachable");
+    }
+
     *f = (struct Flag){
         .name = name,
         .description = description,
@@ -158,6 +196,7 @@ void ap_add_flag(struct Argparser *parser, const char *name,
         .arg_kind = kind,
         ._arg = arg_ptr,
     };
+
     parser->flags[parser->flag_count] = f;
     parser->flag_count++;
 }
@@ -241,7 +280,7 @@ static void ap_print_usage(struct Argparser *parser)
 static int ap_parse_argument(struct Argparser *parser, int argc,
                              const char *argv[])
 {
-    if (argc == 0 && parser->arg_kind != 'n') {
+    if (argc == 0 && parser->arg_kind != 'n' && parser->arg_kind != 'b') {
         fprintf(stderr, "parse: %s argument for %s not provided\n",
                 argument_kind_str(parser->arg_kind), parser->name);
         return -1;
@@ -253,6 +292,9 @@ static int ap_parse_argument(struct Argparser *parser, int argc,
     // For now this just means consuming the thing
     switch (parser->arg_kind) {
     case 'n':
+        break;
+    case 'b':
+        *((bool *) parser->_arg) = true;
         break;
     case 'i': {
         const char *arg = argv[0];
@@ -291,6 +333,70 @@ static int ap_parse_argument(struct Argparser *parser, int argc,
     }
     default:
         panic("parse: invalid argument kind %d", parser->arg_kind);
+    }
+
+    return initial_argc - argc;
+}
+
+// Attempt to parse an argument. It is considered an error if no valid argument
+// is found.
+// Returns the number of arguments parsed on success, and -1 on error.
+static int ap_parse_argument_flag(struct Flag *flag, int argc,
+                                  const char *argv[])
+{
+    if (argc == 0 && flag->arg_kind != 'n' && flag->arg_kind != 'b') {
+        fprintf(stderr, "parse: %s argument for %s not provided\n",
+                argument_kind_str(flag->arg_kind), flag->name);
+        return -1;
+    }
+
+    int initial_argc = argc;
+
+    // Parse the argument
+    // For now this just means consuming the thing
+    switch (flag->arg_kind) {
+    case 'n':
+        break;
+    case 'b':
+        *((bool *) flag->_arg) = true;
+        break;
+    case 'i': {
+        const char *arg = argv[0];
+        char *endptr;
+        long v = strtol(arg, &endptr, 10);
+
+        // Overflow/underflow, should just panic here
+        if (errno == ERANGE || v > INT_MAX || v < INT_MIN)
+            panic("parse: integer overflow on %ld", v);
+
+        //  No digits found in string
+        if (endptr == arg) {
+            fprintf(stderr, "parse: %s is not a valid integer", arg);
+            return -1;
+        }
+
+        // Entire string not consumed (string is not entirely numeric)
+        if (*endptr != '\0') {
+            fprintf(stderr, "parse: %s is not a valid integer", arg);
+            return -1;
+        }
+
+        *((int *) flag->_arg) = v;
+
+        argv++;
+        argc--;
+        break;
+    }
+    case 's': {
+        const char *arg = argv[0];
+        *((const char **) flag->_arg) = arg;
+
+        argv++;
+        argc--;
+        break;
+    }
+    default:
+        panic("parse: invalid argument kind %d", flag->arg_kind);
     }
 
     return initial_argc - argc;
@@ -339,7 +445,7 @@ static int ap_parse_flags(struct Argparser *parser, int argc,
         argc--;
 
         // Try to parse argument
-        int skipped = ap_parse_argument(parser, argc, argv);
+        int skipped = ap_parse_argument_flag(received_flag, argc, argv);
         if (skipped == -1)
             return skipped;
 

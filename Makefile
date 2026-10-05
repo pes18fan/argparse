@@ -1,7 +1,18 @@
 # Makefile to prepare the demo
 SOURCE := demo.c argparse.c
 TARGET := demo
-CFLAGS := -Wall -Wextra -Werror
+CFLAGS := \
+	-std=c99 \
+	-Wall \
+	-Wextra \
+	-Wformat=2 \
+	-Wimplicit-fallthrough \
+	-Wshadow \
+	-Wpointer-arith \
+	-Wswitch-enum \
+	-Wconversion \
+	-Wparentheses \
+	-Werror
 
 all: $(TARGET)
 

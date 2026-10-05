@@ -25,7 +25,7 @@ struct Flag {
     // A character representing the type of _arg. It can be one of:
     //     - 'i': int
     //     - 's': string (const char *)
-    //     - 'b': boolean (bool/_Bool)
+    //     - 'b': boolean (bool or any integer type)
     //     - 'n': none (no argument at all)
     // A point about 'b': it is similar to 'n' in how it is parsed in the
     // sense that it doesn't actually read any command line arg for its value.
@@ -58,7 +58,7 @@ struct Argparser {
     // A character representing the type of _arg. It can be one of:
     //     - 'i': int
     //     - 's': string (const char *)
-    //     - 'b': boolean (bool/_Bool)
+    //     - 'b': boolean (bool or any integer type)
     //     - 'n': none (no argument at all)
     // A point about 'b': it is similar to 'n' in how it is parsed in the
     // sense that it doesn't actually read any command line arg for its value.

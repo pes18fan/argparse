@@ -246,7 +246,7 @@ static void ap_print_usage(struct Argparser *parser)
             printf("    ");
             printf("%s", subparser->name);
             if (subparser->description != NULL) {
-                printf("\t%s", subparser->description);
+                printf("    %s", subparser->description);
             }
             printf("\n");
         }
@@ -267,7 +267,7 @@ static void ap_print_usage(struct Argparser *parser)
             }
 
             if (flag->description != NULL) {
-                printf("\t%s", flag->description);
+                printf("    %s", flag->description);
             }
             printf("\n");
         }
@@ -317,7 +317,7 @@ static int ap_parse_argument(struct Argparser *parser, int argc,
             return -1;
         }
 
-        *((int *) parser->_arg) = v;
+        *((int *) parser->_arg) = (int) v;
 
         argv++;
         argc--;
@@ -381,7 +381,7 @@ static int ap_parse_argument_flag(struct Flag *flag, int argc,
             return -1;
         }
 
-        *((int *) flag->_arg) = v;
+        *((int *) flag->_arg) = (int) v;
 
         argv++;
         argc--;
